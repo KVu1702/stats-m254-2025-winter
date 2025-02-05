@@ -1,7 +1,9 @@
 ---
 title: "hw1"
+author: Khoa Vu 705600710
 output:
-  pdf_document: default
+  pdf_document: 
+    latex_engine: xelatex
   html_document: default
 ---
 
