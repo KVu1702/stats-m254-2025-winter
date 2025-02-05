@@ -1,6 +1,8 @@
 ---
 title: "hw1"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 **Problem 1: Multiple Testing (20 pts)**
@@ -87,7 +89,7 @@ sig_level_bonferroni
 DEGs
 ```
 
-There are 0 genes that are classified as differentially expressed using the p-value of 7.320644e-06 obtained from controlling the Family Wise Error Rate.
+There are 0 genes that are classified as differentially expressed using the p-value of 7.320644e-06 obtained from controlling the Family Wise Error Rate. This p-value is derived by dividing our initial alpha by the number of tests performed.
 
 3.  What will be the p-value cutoff if you would like to control the False Discovery Rate under 0.05 using the Benjamini-Hochberg procedure? How many genes will be identified as differentially expressed using this cutoff?
 
@@ -110,7 +112,7 @@ FDR_Cutoff
 DEGs
 ```
 
-There are 0 genes that are classified as differentially expressed using the p-value of 7.320644e-06 obtained from controlling the False Discovery Rate.
+There are 0 genes that are classified as differentially expressed using the p-value of 7.320644e-06 obtained from controlling the False Discovery Rate. We derive the p-value from first ordering our p-values from most to least significant and then obtaining our significance threshold from the Bonferroni correction. We iterate through the ordered p-values and multiply our significance threshold by the number of iterations. Once we have reached a p-value that does not meet our significance threshold, it becomes our new p-value. However, since no genes are significant from the original Bonferroni correction, our p-value from controlling the False Discovery Rate is the same as if we had controlled the Family Wise Error Rate
 
 4.  What will be the p-value cutoff if you would like to control the Per-Comparison Error Rate (i.e., significance level) under 0.05? How many genes will be identified as differentially expressed using this cutoff?
 
@@ -127,7 +129,7 @@ for (gene in pvals) {
 DEGs
 ```
 
-There are 670 genes that are classified as differentially expressed using the p-value of 0.05 obtained from controlling the Per-Comparison Error Rate.
+There are 670 genes that are classified as differentially expressed using the p-value of 0.05 obtained from controlling the Per-Comparison Error Rate, since the p-value is simply our significance threshold, alpha.
 
 **Problem 2 (15 pts)**
 
@@ -142,17 +144,17 @@ Use the `NCI60` data, give an example to each of the following data analysis tas
 
 **Solution:**
 
-1. Using the `NCI60` data, a possible descriptive study calculates the mean, median, range, minimum, maximum, variance, and other summary statistics of the genes in each cancer cell line.
+1.  Using the `NCI60` data, a possible descriptive study calculates the mean, median, range, minimum, maximum, variance, and other summary statistics of the genes in each cancer cell line.
 
-2. Using the `NCI60` data, a possible exploratory study would be to visualize the summary statistics and compare the summary statistics of the same gene across different cancer cell lines.
+2.  Using the `NCI60` data, a possible exploratory study would be to visualize the summary statistics and compare the summary statistics of the same gene across different cancer cell lines.
 
-3. Using the `NCI60` data, a possible inferential study would be to perform statistical testing to determine if a gene is a biomarker for a specific cancer cell line.
+3.  Using the `NCI60` data, a possible inferential study would be to perform statistical testing to determine if a gene is a biomarker for a specific cancer cell line.
 
-4. Using the `NCI60` data, a possible predictive study would be to perform supervised clustering to see if the gene expression data can be used to predict the cancer cell line or perform binary classification to determine whether a patient has cancer.
+4.  Using the `NCI60` data, a possible predictive study would be to perform supervised clustering to see if the gene expression data can be used to predict the cancer cell line or perform binary classification to determine whether a patient has cancer.
 
-5. Using the `NCI60` data, a possible causal study would be to determine if a significantly different expression of one gene is responsible for a specific cancer. 
+5.  Using the `NCI60` data, a possible causal study would be to determine if a significantly different expression of one gene is responsible for a specific cancer.
 
-6. Using the `NCI60` data, a possible mechanistic study would be to conduct gene ontology on differentially expressed genes to reveal possible pathways that are involved in each cancer cell line respectively to other cancer cell lines.
+6.  Using the `NCI60` data, a possible mechanistic study would be to conduct gene ontology on differentially expressed genes to reveal possible pathways that are involved in each cancer cell line respectively to other cancer cell lines.
 
 **Problem 3 (20 pts)**
 
@@ -402,5 +404,4 @@ ggplot(data = data.frame(means), aes(x = means)) +
 
 ```
 
-The sample mean distribution appears smoothest when increasing n to 1000 versus n = 10 and n = 100. We can include that the distribution of the sample mean resembles a normal/Gaussian distribution and becomes smoother as n increases.
-
+The sample mean distribution appears smoothest when increasing n to 1000 versus n = 10 and n = 100. We can include the distribution of the sample mean resembles a normal/Gaussian distribution and becomes smoother as n increases. This is consistent with the central limit theorem, which states that the sampling distribution is approximately normal if the samples are large enough.
