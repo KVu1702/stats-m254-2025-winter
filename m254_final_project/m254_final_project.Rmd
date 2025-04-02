@@ -1,0 +1,1135 @@
+---
+title: "Final Project"
+author: Khoa Vu 705600710
+output:
+  pdf_document: 
+    latex_engine: xelatex
+  html_document: default
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+Code for STATS M254 W25 Final Project
+
+```{r}
+sessionInfo()
+```
+
+```{r}
+#eval|echo=FALSE
+#Installing the required packages and versions
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install('glmGamPoi')
+BiocManager::install("biomaRt")
+remotes::install_version("Seurat", version = "5.0.3")
+install.packages("sctransform")
+py_install("leidenalg")
+py_install("pandas")
+```
+
+```{r}
+#Loading in Seurat
+library(Seurat)
+library(biomaRt)
+library(sctransform)
+library(reticulate)
+library(dplyr)
+```
+
+```{r}
+#Setting the seed for reproducibility
+set.seed(2024)
+```
+
+**Part 1**
+(1) BoneMarrow_dataset1.rds
+
+```{r}
+#Loading in Bone_Marrow_dataset1.rds
+bone_marrow1.data <- readRDS("BoneMarrow_dataset1.rds")
+
+#Creating the Seurat object
+#Filtering genes that appear in at least 3 cells
+#Filtering cells with at least 200 genes
+bone_marrow1 <- CreateSeuratObject(counts = bone_marrow1.data, 
+                                   project = "bone_marrow1", 
+                                   assay = "RNA", 
+                                   min.cells = 3, 
+                                   min.features = 200)
+
+#Retrieving gene IDs from ENSEMBLE IDs using biomart
+ensembl <- useMart("ensembl", dataset="hsapiens_gene_ensembl")
+bm <- getBM(attributes=c("ensembl_gene_id", "hgnc_symbol"), 
+            values=rownames(bone_marrow1.data), 
+            mart=ensembl)
+#Obtaining the ensemble genes for mitochondrial genes use in QC
+mito_genes <- bm[grep("^MT-", bm$hgnc_symbol), "ensembl_gene_id"]
+#Only filter mitochondrial genes in the dataset
+mito_genes <- mito_genes[mito_genes %in% rownames(bone_marrow1)]
+
+#Performing quality control metrics -- Checking MT% fraction
+bone_marrow1[["percent.mt"]] <- PercentageFeatureSet(bone_marrow1, 
+                                                     features = c(mito_genes))
+
+#Visualize QC metrics as a violin plot
+VlnPlot(bone_marrow1, 
+        features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), 
+        ncol = 3)
+```
+
+```{r}
+#Filtering our Seurat Object
+bone_marrow1 <- subset(bone_marrow1, subset = nFeature_RNA > 200 & 
+                 nFeature_RNA < 3000 & 
+                 percent.mt < 8)
+
+#Performing normalization using ScTransform
+bone_marrow1 <- SCTransform(bone_marrow1, 
+                         vars.to.regress = "percent.mt", 
+                         verbose = FALSE)
+
+#PCA, UMAP, and clustering using Leiden
+#Setting seed for repoducibility
+set.seed(2024)
+
+bone_marrow1 <- RunPCA(bone_marrow1, verbose = FALSE)
+bone_marrow1 <- RunUMAP(bone_marrow1, dims = 1:30, verbose = FALSE)
+
+bone_marrow1 <- FindNeighbors(bone_marrow1, dims = 1:30, verbose = FALSE)
+
+#Importing the leiden algorithm and setting seed for reproducibility
+bone_marrow1 <- FindClusters(bone_marrow1, verbose = FALSE, algorithm = 4)
+
+#Plotting the clusters
+DimPlot(bone_marrow1, label = TRUE)
+```
+
+```{r}
+#Finding the marker genes
+bone_marrow1.markers <- FindAllMarkers(bone_marrow1, only.pos = TRUE)
+
+#Saving the preprocessed scRNA-seq data leiden cluster identities
+saveRDS(bone_marrow1, file = "bone_marrow1_clustered.rds")
+#Saving the marker genes as a dataframe
+saveRDS(bone_marrow1.markers, "bone_marrow1_markers.rds")
+
+```
+
+```{r}
+#Plotting marker genes for Lymphocyte Cells
+
+#Finding the ENSEMBLE IDS for those genes
+lympho_markers <- bm[bm$hgnc_symbol %in% c("CD3D", "CD3E"), 
+                 "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+lympho_markers <- lympho_markers[lympho_markers %in% rownames(bone_marrow1)]
+
+FeaturePlot(bone_marrow1, 
+            features = lympho_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+
+```
+
+```{r}
+#Plotting marker genes for Mucosal-associated invariant T cell
+
+#Finding the ENSEMBLE IDS for those genes
+mait_markers <- bm[bm$hgnc_symbol %in% c("TRAV1-2", 
+                                         "TRAJ33", 
+                                         "TRAJ12", 
+                                         "TRAJ20"), 
+                 "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+mait_markers <- mait_markers[mait_markers %in% rownames(bone_marrow1)]
+
+FeaturePlot(bone_marrow1, 
+            features = mait_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+
+```
+
+```{r}
+#Plotting marker genes for CD8+ T Cells
+
+#Finding the ENSEMBLE IDS for those genes
+cd8_markers <- bm[bm$hgnc_symbol %in% c("CD8A"), 
+                 "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+cd8_markers <- cd8_markers[cd8_markers %in% rownames(bone_marrow1)]
+
+FeaturePlot(bone_marrow1, 
+            features = cd8_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+
+```
+
+```{r}
+#Plotting marker genes for CD4+ T Cells
+
+#Finding the ENSEMBLE IDS for those genes
+cd4_markers <- bm[bm$hgnc_symbol %in% c("CD4"), 
+                 "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+cd4_markers <- cd4_markers[cd4_markers %in% rownames(bone_marrow1)]
+
+FeaturePlot(bone_marrow1, 
+            features = cd4_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+
+```
+
+```{r}
+#Plotting marker genes for regulatory T-Cells
+
+#Finding the ENSEMBLE IDS for those genes
+reg_markers <- bm[bm$hgnc_symbol %in% c("IL2RA", "FOXP3"), 
+                 "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+reg_markers <- reg_markers[reg_markers %in% rownames(bone_marrow1)]
+
+FeaturePlot(bone_marrow1, 
+            features = reg_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+
+```
+
+```{r}
+#Plotting marker genes for small pre-B-II cell 
+
+#Finding the ENSEMBLE IDS for those genes
+pre_b_II_cell_markers <- bm[bm$hgnc_symbol %in% c("CYGB", "CD19"), 
+                 "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+pre_b_II_cell_markers <- pre_b_II_cell_markers[pre_b_II_cell_markers 
+                                               %in% rownames(bone_marrow1)]
+
+FeaturePlot(bone_marrow1, 
+            features = pre_b_II_cell_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+#Plotting marker genes for Naive B-Cells
+
+#Finding the ENSEMBLE IDS for those genes
+b_cell_markers <- bm[bm$hgnc_symbol %in% c("MS4A1", "CD19"), 
+                 "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+b_cell_markers <- b_cell_markers[b_cell_markers %in% rownames(bone_marrow1)]
+
+FeaturePlot(bone_marrow1, 
+            features = b_cell_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+#Plotting marker genes for memory B-Cells
+
+#Finding the ENSEMBLE IDS for those genes
+memory_b_cell_markers <- bm[bm$hgnc_symbol %in% c("CD19", "CD27"), 
+                 "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+memory_b_cell_markers <- memory_b_cell_markers[memory_b_cell_markers 
+                                         %in% rownames(bone_marrow1)]
+
+FeaturePlot(bone_marrow1, 
+            features = memory_b_cell_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+#Plotting marker genes for precursor B-Cells
+#Low expression of CD22 in the precursor stage
+
+#Finding the ENSEMBLE IDS for those genes
+pre_b_cell_markers <- bm[bm$hgnc_symbol %in% c("PAX5", "CD22"), 
+                 "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+pre_b_cell_markers <- pre_b_cell_markers[pre_b_cell_markers 
+                                         %in% rownames(bone_marrow1)]
+
+FeaturePlot(bone_marrow1, 
+            features = pre_b_cell_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+#Plotting marker genes for CD16+ NK Cells
+#CD16 = FCGR3A
+#If only NK Cells, CD16-
+
+#Finding the ENSEMBLE IDS for those genes
+nk_markers <- bm[bm$hgnc_symbol %in% c("GNLY", "NKG7", "FCGR3A"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+nk_markers <- nk_markers[nk_markers %in% rownames(bone_marrow1)]
+
+FeaturePlot(bone_marrow1, 
+            features = nk_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+
+```
+
+```{r}
+#Plotting marker genes for Myeloid Cells
+
+#Finding the ENSEMBLE IDS for those genes
+myeloid_markers <- bm[bm$hgnc_symbol %in% c("ITGAM"), 
+                 "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+myeloid_markers <- myeloid_markers[myeloid_markers %in% rownames(bone_marrow1)]
+
+FeaturePlot(bone_marrow1, 
+            features = myeloid_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+#Plotting marker genes for Plasmacytoid dendritic cell
+#CD123 = IL3RA
+
+#Finding the ENSEMBLE IDS for those genes
+pDC_markers <- bm[bm$hgnc_symbol %in% c("HLA-DRA", "HLA-DRB1", "IL3RA"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+pDC_markers <- pDC_markers[pDC_markers %in% rownames(bone_marrow1)]
+
+FeaturePlot(bone_marrow1, 
+            features = pDC_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+#Plotting marker genes for conventional dendritic cell
+#CD11c = ITGAX
+
+#Finding the ENSEMBLE IDS for those genes
+cDC_markers <- bm[bm$hgnc_symbol %in% c("ITGAX", "FCER1A", "CST3"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+cDC_markers <- cDC_markers[cDC_markers %in% rownames(bone_marrow1)]
+
+FeaturePlot(bone_marrow1, 
+            features = cDC_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+#Plotting marker genes for classical monocytes
+
+#Finding the ENSEMBLE IDS for those genes
+class_mono_markers <- bm[bm$hgnc_symbol %in% c("CD14", "LYZ"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+class_mono_markers <- class_mono_markers[class_mono_markers %in% rownames(bone_marrow1)]
+
+FeaturePlot(bone_marrow1, 
+            features = class_mono_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+#Plotting marker genes for nonclassical monocytes
+
+#Finding the ENSEMBLE IDS for those genes
+non_class_mono_markers <- bm[bm$hgnc_symbol %in% c("MS4A7", "FCGR3A"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+non_class_mono_markers <- non_class_mono_markers[
+  non_class_mono_markers %in% rownames(bone_marrow1)
+  ]
+
+FeaturePlot(bone_marrow1, 
+            features = non_class_mono_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+#Plotting marker genes for macrophages
+
+#Finding the ENSEMBLE IDS for those genes
+macro_markers <- bm[bm$hgnc_symbol %in% c("CD68"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+macro_markers <- macro_markers[macro_markers %in% rownames(bone_marrow1)]
+
+FeaturePlot(bone_marrow1, 
+            features = macro_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+#Plotting marker genes for myeloid progenitors
+
+#Finding the ENSEMBLE IDS for those genes
+myeloid_p_markers <- bm[bm$hgnc_symbol %in% c("CD34"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+myeloid_p_markers <- myeloid_p_markers[myeloid_p_markers %in% rownames(bone_marrow1)]
+
+FeaturePlot(bone_marrow1, 
+            features = myeloid_p_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+#Plotting marker genes for Plasma cell
+
+#Finding the ENSEMBLE IDS for those genes
+plasma_markers <- bm[bm$hgnc_symbol %in% c("SDC1"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+plasma_markers <- plasma_markers[plasma_markers 
+                                       %in% rownames(bone_marrow1)]
+
+FeaturePlot(bone_marrow1, 
+            features = plasma_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+
+```
+
+```{r}
+#Plotting marker genes for megakaryocyte cell
+#ITGA2B = CD41
+
+#Finding the ENSEMBLE IDS for those genes
+megakaryocyte_markers <- bm[bm$hgnc_symbol %in% c("ITGA2B"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+megakaryocyte_markers <- megakaryocyte_markers[megakaryocyte_markers 
+                                       %in% rownames(bone_marrow1)]
+
+FeaturePlot(bone_marrow1, 
+            features = megakaryocyte_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+
+```
+
+```{r}
+#Plotting marker genes for Erythroid progenitor cell
+#TFRC = CD71
+
+#Finding the ENSEMBLE IDS for those genes
+erythroid_markers <- bm[bm$hgnc_symbol %in% c("TFRC"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+erythroid_markers <- erythroid_markers[erythroid_markers 
+                                       %in% rownames(bone_marrow1)]
+
+FeaturePlot(bone_marrow1, 
+            features = erythroid_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+
+```
+
+```{r}
+#Plotting marker genes for Hematopoietic stem cell progenitors
+#THY1 = CD90
+
+#Finding the ENSEMBLE IDS for those genes
+hematopoietic_markers <- bm[bm$hgnc_symbol %in% c("CD34", "THY1", "CD59"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+hematopoietic_markers <- hematopoietic_markers[hematopoietic_markers 
+                                               %in% rownames(bone_marrow1)]
+
+FeaturePlot(bone_marrow1, 
+            features = hematopoietic_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+# 1: CD4 T cell (CD4+)
+# 2: Dendritic cell (ITGAX+, FCER1A+, CST3+)
+# 3: CD8 T cell (CD8a+)
+# 4: CD8 T cell (CD8a+)
+# 5: CD16 natural killer cell (GNLY+, NKG7+, FCGR3A+)
+# 6: Naive B cell (MS4A1+, CD19+)
+# 7: CD16 natural killer cell (GNLY+, NKG7+, FCGR3A+)
+# 8: Classical monocyte cell (CD14+, LYZ+)
+# 9: Dendritic cell (ITGAX+, FCER1A+, CST3+)
+# 10: CD16 natural killer cell (GNLY+, NKG7+, FCGR3A+)
+# 11: Plasmacytoid dendritic cell
+# 12: Myeloid Progenitors (CD34+)
+# 13: Non-classical monocyte cell (MS4A7+, FCGR3A+)
+
+#Labeling the cell with their cell types
+new.cluster.ids <- c("CD4 T cell", 
+                     "Dendritic cell", 
+                     "CD8 T cell", 
+                     "CD8 T cell", 
+                     "CD16 natural killer cell",
+                     "Naive B cell", 
+                     "CD16 natural killer cell", 
+                     "Classical monocyte cell", 
+                     "Dendritic cell",
+                     "CD16 natural killer cell", 
+                     "Plasmacytoid dendritic cell",
+                     "Myeloid progenitor",
+                     "Non-classical monocyte cell")
+
+names(new.cluster.ids) <- levels(bone_marrow1)
+bone_marrow1 <- RenameIdents(bone_marrow1, new.cluster.ids)
+
+#Setting cell_type to be cell type annotations
+bone_marrow1$cell_type <- Idents(bone_marrow1)
+
+DimPlot(bone_marrow1, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
+
+```
+
+```{r}
+#Saving bone_marrow1 with annotations
+saveRDS(bone_marrow1, file = "bone_marrow1_annotated.rds")
+```
+
+(2) BoneMarrow_dataset2.rds
+
+```{r}
+#Loading in Bone_Marrow_dataset2.rds
+bone_marrow2.data <- readRDS("BoneMarrow_dataset2.rds")
+
+#Creating the Seurat object
+#Filtering genes that appear in at least 3 cells
+#Filtering cells with at least 200 genes
+bone_marrow2 <- CreateSeuratObject(counts = bone_marrow2.data, 
+                                   project = "bone_marrow2", 
+                                   assay = "RNA", 
+                                   min.cells = 3, 
+                                   min.features = 200)
+
+#Retrieving gene IDs from ENSEMBLE IDs using biomart
+ensembl <- useMart("ensembl", dataset="hsapiens_gene_ensembl")
+bm <- getBM(attributes=c("ensembl_gene_id", "hgnc_symbol"), 
+            values=rownames(bone_marrow2.data), 
+            mart=ensembl)
+#Obtaining the ensemble genes for mitochondrial genes use in QC
+mito_genes <- bm[grep("^MT-", bm$hgnc_symbol), "ensembl_gene_id"]
+#Only filter mitochondrial genes in the dataset
+mito_genes <- mito_genes[mito_genes %in% rownames(bone_marrow2)]
+
+#Performing quality control metrics -- Checking MT% fraction
+bone_marrow2[["percent.mt"]] <- PercentageFeatureSet(bone_marrow2, 
+                                                     features = c(mito_genes))
+
+#Visualize QC metrics as a violin plot
+VlnPlot(bone_marrow2, 
+        features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), 
+        ncol = 3)
+```
+
+```{r}
+#Filtering our Seurat Object
+bone_marrow2 <- subset(bone_marrow2, subset = nFeature_RNA > 200 & 
+                 nFeature_RNA < 3000 & 
+                 percent.mt < 8)
+
+#Performing normalization using ScTransform
+bone_marrow2 <- SCTransform(bone_marrow2, 
+                         vars.to.regress = "percent.mt", 
+                         verbose = FALSE)
+
+#PCA, UMAP, and clustering using Leiden
+#Setting seed for repoducibility
+set.seed(2024)
+
+bone_marrow2 <- RunPCA(bone_marrow2, verbose = FALSE)
+bone_marrow2 <- RunUMAP(bone_marrow2, dims = 1:30, verbose = FALSE)
+
+bone_marrow2 <- FindNeighbors(bone_marrow2, dims = 1:30, verbose = FALSE)
+
+#Importing the leiden algorithm and setting seed for reproducibility
+bone_marrow2 <- FindClusters(bone_marrow2, verbose = FALSE, algorithm = 4)
+
+#Plotting the clusters
+DimPlot(bone_marrow2, label = TRUE)
+```
+
+```{r}
+#Finding the marker genes
+bone_marrow2.markers <- FindAllMarkers(bone_marrow2, only.pos = TRUE)
+
+#Saving the preprocessed scRNA-seq data leiden cluster identities
+saveRDS(bone_marrow2, file = "bone_marrow2_clustered.rds")
+#Saving the marker genes as a dataframe
+saveRDS(bone_marrow2.markers, "bone_marrow2_markers.rds")
+
+```
+
+```{r}
+#Plotting marker genes for Lymphocyte Cells
+
+#Finding the ENSEMBLE IDS for those genes
+lympho_markers <- bm[bm$hgnc_symbol %in% c("CD3D", "CD3E"), 
+                 "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+lympho_markers <- lympho_markers[lympho_markers %in% rownames(bone_marrow2)]
+
+FeaturePlot(bone_marrow2, 
+            features = lympho_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+
+```
+
+```{r}
+#Plotting marker genes for Mucosal-associated invariant T cell
+
+#Finding the ENSEMBLE IDS for those genes
+mait_markers <- bm[bm$hgnc_symbol %in% c("TRAV1-2", 
+                                         "TRAJ33", 
+                                         "TRAJ12", 
+                                         "TRAJ20"), 
+                 "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+mait_markers <- mait_markers[mait_markers %in% rownames(bone_marrow2)]
+
+FeaturePlot(bone_marrow2, 
+            features = mait_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+
+```
+
+```{r}
+#Plotting marker genes for CD8+ T Cells
+
+#Finding the ENSEMBLE IDS for those genes
+cd8_markers <- bm[bm$hgnc_symbol %in% c("CD8A"), 
+                 "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+cd8_markers <- cd8_markers[cd8_markers %in% rownames(bone_marrow2)]
+
+FeaturePlot(bone_marrow2, 
+            features = cd8_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+
+```
+
+```{r}
+#Plotting marker genes for CD4+ T Cells
+
+#Finding the ENSEMBLE IDS for those genes
+cd4_markers <- bm[bm$hgnc_symbol %in% c("CD4"), 
+                 "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+cd4_markers <- cd4_markers[cd4_markers %in% rownames(bone_marrow2)]
+
+FeaturePlot(bone_marrow2, 
+            features = cd4_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+
+```
+
+```{r}
+#Plotting marker genes for regulatory T-Cells
+
+#Finding the ENSEMBLE IDS for those genes
+reg_markers <- bm[bm$hgnc_symbol %in% c("IL2RA", "FOXP3"), 
+                 "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+reg_markers <- reg_markers[reg_markers %in% rownames(bone_marrow1)]
+
+FeaturePlot(bone_marrow2, 
+            features = reg_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+
+```
+
+```{r}
+#Plotting marker genes for naive B-Cells
+
+#Finding the ENSEMBLE IDS for those genes
+b_cell_markers <- bm[bm$hgnc_symbol %in% c("MS4A1", "CD19"), 
+                 "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+b_cell_markers <- b_cell_markers[b_cell_markers %in% rownames(bone_marrow2)]
+
+FeaturePlot(bone_marrow2, 
+            features = b_cell_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+#Plotting marker genes for small pre-B-II cell 
+
+#Finding the ENSEMBLE IDS for those genes
+pre_b_II_cell_markers <- bm[bm$hgnc_symbol %in% c("CYGB", "CD19"), 
+                 "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+pre_b_II_cell_markers <- pre_b_II_cell_markers[pre_b_II_cell_markers 
+                                               %in% rownames(bone_marrow2)]
+
+FeaturePlot(bone_marrow2, 
+            features = pre_b_II_cell_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+#Plotting marker genes for precursor B-Cells
+#Low expression of CD22 in the precursor stage
+
+#Finding the ENSEMBLE IDS for those genes
+pre_b_cell_markers <- bm[bm$hgnc_symbol %in% c("PAX5", "CD22"), 
+                 "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+pre_b_cell_markers <- pre_b_cell_markers[pre_b_cell_markers 
+                                         %in% rownames(bone_marrow2)]
+
+FeaturePlot(bone_marrow2, 
+            features = pre_b_cell_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+#Plotting marker genes for memory B-Cells
+
+#Finding the ENSEMBLE IDS for those genes
+memory_b_cell_markers <- bm[bm$hgnc_symbol %in% c("CD19", "CD27"), 
+                 "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+memory_b_cell_markers <- memory_b_cell_markers[memory_b_cell_markers 
+                                         %in% rownames(bone_marrow2)]
+
+FeaturePlot(bone_marrow2, 
+            features = memory_b_cell_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+#Plotting marker genes for CD16 NK Cells
+#CD16 = FCGR3A
+#If only NK Cells, CD16-
+
+#Finding the ENSEMBLE IDS for those genes
+nk_markers <- bm[bm$hgnc_symbol %in% c("GNLY", "NKG7", "FCGR3A"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+nk_markers <- nk_markers[nk_markers %in% rownames(bone_marrow2)]
+
+FeaturePlot(bone_marrow2, 
+            features = nk_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+
+```
+
+```{r}
+#Plotting marker genes for Myeloid Cells
+
+#Finding the ENSEMBLE IDS for those genes
+myeloid_markers <- bm[bm$hgnc_symbol %in% c("ITGAM"), 
+                 "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+myeloid_markers <- myeloid_markers[myeloid_markers %in% rownames(bone_marrow2)]
+
+FeaturePlot(bone_marrow2, 
+            features = myeloid_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+#Plotting marker genes for Plasmacytoid dendritic cell
+#CD123 = IL3RA
+
+#Finding the ENSEMBLE IDS for those genes
+pDC_markers <- bm[bm$hgnc_symbol %in% c("HLA-DRA", "HLA-DRB1", "IL3RA"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+pDC_markers <- pDC_markers[pDC_markers %in% rownames(bone_marrow2)]
+
+FeaturePlot(bone_marrow2, 
+            features = pDC_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+#Plotting marker genes for conventional dendritic cell
+#CD11c = ITGAX
+
+#Finding the ENSEMBLE IDS for those genes
+cDC_markers <- bm[bm$hgnc_symbol %in% c("ITGAX", "FCER1A", "CST3"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+cDC_markers <- cDC_markers[cDC_markers %in% rownames(bone_marrow2)]
+
+FeaturePlot(bone_marrow2, 
+            features = cDC_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+#Plotting marker genes for classical monocytes
+
+#Finding the ENSEMBLE IDS for those genes
+class_mono_markers <- bm[bm$hgnc_symbol %in% c("CD14", "LYZ"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+class_mono_markers <- class_mono_markers[class_mono_markers %in% rownames(bone_marrow2)]
+
+FeaturePlot(bone_marrow2, 
+            features = class_mono_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+#Plotting marker genes for non classical monocytes
+
+#Finding the ENSEMBLE IDS for those genes
+non_class_mono_markers <- bm[bm$hgnc_symbol %in% c("MS4A7", "FCGR3A"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+non_class_mono_markers <- non_class_mono_markers[
+  non_class_mono_markers %in% rownames(bone_marrow2)
+  ]
+
+FeaturePlot(bone_marrow2, 
+            features = non_class_mono_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+#Plotting marker genes for macrophages
+
+#Finding the ENSEMBLE IDS for those genes
+macro_markers <- bm[bm$hgnc_symbol %in% c("CD68"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+macro_markers <- macro_markers[macro_markers %in% rownames(bone_marrow2)]
+
+FeaturePlot(bone_marrow2, 
+            features = macro_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+#Plotting marker genes for myeloid progenitors
+
+#Finding the ENSEMBLE IDS for those genes
+myeloid_p_markers <- bm[bm$hgnc_symbol %in% c("CD34"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+myeloid_p_markers <- myeloid_p_markers[myeloid_p_markers %in% rownames(bone_marrow2)]
+
+FeaturePlot(bone_marrow2, 
+            features = myeloid_p_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+
+```
+
+```{r}
+#Plotting marker genes for Plasma cell
+
+#Finding the ENSEMBLE IDS for those genes
+plasma_markers <- bm[bm$hgnc_symbol %in% c("SDC1"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+plasma_markers <- plasma_markers[plasma_markers 
+                                       %in% rownames(bone_marrow2)]
+
+FeaturePlot(bone_marrow2, 
+            features = plasma_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+
+```
+
+```{r}
+#Plotting marker genes for megakaryocyte cell
+#ITGA2B = CD41
+
+#Finding the ENSEMBLE IDS for those genes
+megakaryocyte_markers <- bm[bm$hgnc_symbol %in% c("ITGA2B"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+megakaryocyte_markers <- megakaryocyte_markers[megakaryocyte_markers 
+                                       %in% rownames(bone_marrow2)]
+
+FeaturePlot(bone_marrow2, 
+            features = megakaryocyte_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+
+```
+
+```{r}
+#Plotting marker genes for Erythroid progenitor cell
+#TFRC = CD71
+
+#Finding the ENSEMBLE IDS for those genes
+erythroid_markers <- bm[bm$hgnc_symbol %in% c("TFRC"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+erythroid_markers <- erythroid_markers[erythroid_markers 
+                                       %in% rownames(bone_marrow2)]
+
+FeaturePlot(bone_marrow2, 
+            features = erythroid_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+
+```
+
+```{r}
+#Plotting marker genes for Hematopoietic stem cell progenitors
+#THY1 = CD90
+
+#Finding the ENSEMBLE IDS for those genes
+hematopoietic_markers <- bm[bm$hgnc_symbol %in% c("CD34", "THY1", "CD59"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+hematopoietic_markers <- hematopoietic_markers[hematopoietic_markers 
+                                               %in% rownames(bone_marrow2)]
+
+FeaturePlot(bone_marrow2, 
+            features = hematopoietic_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+```
+
+```{r}
+# 1: CD4 T cell (CD4+)
+# 2: Dendritic cell (ITGAX+, FCER1A+, CST3+)
+# 3: Naive B cell (MS4A1+, CD19+)
+# 4: Classical monocyte cell (CD14+, LYZ+)
+# 5: CD8 T cell (CD8a+)
+# 6: CD16 natural killer cell (GNLY+, NKG7+, FCGR3A+)
+# 7: CD4 T cell (CD4+)
+# 8: CD16 natural killer cell (GNLY+, NKG7+, FCGR3A+)
+# 9: Dendritic cell (ITGAX+, FCER1A+, CST3+)
+# 10: CD16 natural killer cell (GNLY+, NKG7+, FCGR3A+)
+# 11: Plasmacytoid dendritic cell (HLA-DRA+, HLA-DRB1+, IL3RA+)
+# 12: CD8 T cell (CD8a+)
+# 13: Myeloid Progenitors (CD34+)
+# 14: Plasma cell (SDC1+)
+# 15: Precursor B cell (PAX5+, CD22-)
+
+#Labeling the cell with their cell types
+new.cluster.ids <- c("CD4 T cell", 
+                     "Dendritic cell", 
+                     "Naive B cell", 
+                     "Classical monocyte cell",
+                     "CD8 T cell", 
+                     "CD16 natural killer cell",
+                     "CD4 T cell", 
+                     "CD16 natural killer cell", 
+                     "Dendritic cell", 
+                     "CD16 natural killer cell",
+                     "Plasmacytoid dendritic cell",
+                     "CD8 T cell",
+                     "Myeloid progenitor",
+                     "Plasma cell",
+                     "Precursor B cell")
+
+names(new.cluster.ids) <- levels(bone_marrow2)
+bone_marrow2 <- RenameIdents(bone_marrow2, new.cluster.ids)
+
+#Setting cell_type to be cell type annotations
+bone_marrow2$cell_type <- Idents(bone_marrow2)
+
+DimPlot(bone_marrow2, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
+
+```
+
+```{r}
+#Saving bone_marrow2 with annotations
+saveRDS(bone_marrow2, file = "bone_marrow2_annotated.rds")
+```
+
+**Part 2**
+Pancreas.rds
+
+```{r}
+#Loading in Pancreas.rds
+pancreas.data <- readRDS("Pancreas.rds")
+
+#Creating the Seurat object
+#Filtering genes that appear in at least 3 cells
+#Filtering cells with at least 200 genes
+pancreas <- CreateSeuratObject(counts = pancreas.data, 
+                                   project = "pancreas", 
+                                   assay = "RNA", 
+                                   min.cells = 3, 
+                                   min.features = 200)
+
+#Retrieving gene IDs from ENSEMBLE IDs using biomart
+ensembl <- useMart("ensembl", dataset="hsapiens_gene_ensembl")
+bm <- getBM(attributes=c("ensembl_gene_id", "hgnc_symbol"), 
+            values=rownames(pancreas.data), 
+            mart=ensembl)
+#Obtaining the ensemble genes for mitochondrial genes use in QC
+mito_genes <- bm[grep("^MT-", bm$hgnc_symbol), "ensembl_gene_id"]
+#Only filter mitochondrial genes in the dataset
+mito_genes <- mito_genes[mito_genes %in% rownames(pancreas)]
+
+#Performing quality control metrics -- Checking MT% fraction
+pancreas[["percent.mt"]] <- PercentageFeatureSet(pancreas, 
+                                                     features = c(mito_genes))
+
+#Visualize QC metrics as a violin plot
+VlnPlot(pancreas, 
+        features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), 
+        ncol = 3)
+```
+
+```{r}
+#Filtering our Seurat Object
+pancreas <- subset(pancreas, subset = nFeature_RNA > 200 & 
+                 nFeature_RNA < 4000 & 
+                 percent.mt < 8)
+
+#Performing normalization using ScTransform
+pancreas <- SCTransform(pancreas, 
+                         vars.to.regress = "percent.mt", 
+                         verbose = FALSE)
+
+#PCA, UMAP, and clustering using Leiden
+#Setting seed for repoducibility
+set.seed(2024)
+
+pancreas <- RunPCA(pancreas, verbose = FALSE)
+pancreas <- RunUMAP(pancreas, dims = 1:30, verbose = FALSE)
+
+pancreas <- FindNeighbors(pancreas, dims = 1:30, verbose = FALSE)
+
+#Importing the leiden algorithm and setting seed for reproducibility
+pancreas <- FindClusters(pancreas, verbose = FALSE, algorithm = 4)
+
+#Plotting the clusters
+DimPlot(pancreas, label = TRUE)
+```
+
+```{r}
+#Finding the marker genes
+pancreas.markers <- FindAllMarkers(pancreas, only.pos = TRUE)
+
+#Saving the preprocessed scRNA-seq data leiden cluster identities
+saveRDS(pancreas, file = "pancreas_clustered.rds")
+#Saving the marker genes as a dataframe
+saveRDS(pancreas.markers, "pancreas_markers.rds")
+
+```
+
+```{r}
+#Plotting marker genes for pancreatic polypeptide (PP) cells
+
+#Finding the ENSEMBLE IDS for those genes
+pp_markers <- bm[bm$hgnc_symbol %in% c("PPY"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+pp_markers <- pp_markers[pp_markers %in% rownames(pancreas)]
+
+FeaturePlot(pancreas, 
+            features = pp_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+
+```
+
+```{r}
+#Plotting marker genes for alpha cells
+
+#Finding the ENSEMBLE IDS for those genes
+alpha_markers <- bm[bm$hgnc_symbol %in% c("ARX", "IRX2", "MAFB", "GCG"), 
+                  "ensembl_gene_id"]
+#Making sure the genes are in the dataset
+alpha_markers <- alpha_markers[alpha_markers %in% rownames(pancreas)]
+
+FeaturePlot(pancreas, 
+            features = alpha_markers, 
+            pt.size = 0.2,
+            ncol = 2)
+
+```
+
+```{r}
+# 1: PP (PPY+)
+# 2: PP (PPY+)
+# 3: PP (PPY+)
+# 4: PP (PPY+)
+# 5: PP (PPY+)
+# 6: PP (PPY+)
+# 7: Alpha (ARX+, IRX2+, MAFB+, GCG+)
+# 8: NA
+
+#Labeling the cell with their cell types
+new.cluster.ids <- c("PP", 
+                     "PP", 
+                     "PP", 
+                     "PP",
+                     "PP", 
+                     "PP",
+                     "alpha", 
+                     "NA")
+
+names(new.cluster.ids) <- levels(pancreas)
+pancreas <- RenameIdents(pancreas, new.cluster.ids)
+
+#Setting cell_type to be cell type annotations
+pancreas$cell_type <- Idents(pancreas)
+
+DimPlot(pancreas, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
+```
+
+```{r}
+#Saving pancreas with annotations
+saveRDS(pancreas, file = "pancreas_annotated.rds")
+```
+
+```{r}
+#Finding other marker genes for PP and alpha genes
+other_pancreas.markers <- FindAllMarkers(pancreas, only.pos = TRUE)
+
+#Saving the other marker genes
+saveRDS(other_pancreas.markers, file = "pancreas_markers_other.rds")
+
+#Top marker genes for PP cells
+other_pancreas.markers %>% 
+  group_by(cluster) %>% 
+  filter(cluster == "PP") %>%
+  head(5)
+
+#Top marker genes for alpha cells
+other_pancreas.markers %>% 
+  group_by(cluster) %>% 
+  filter(cluster == "alpha") %>%
+  head(5)
+
+```

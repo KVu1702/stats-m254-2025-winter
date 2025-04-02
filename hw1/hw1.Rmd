@@ -78,7 +78,8 @@ The observed p-values are not likely from a uniform distribution as they deviate
 **Solution:**
 
 ```{R}
-#We can apply the Bonferroni correction by dividing our original p-value threshold by the number of tests performed.
+#We can apply the Bonferroni correction by dividing our original p-value 
+#threshold by the number of tests performed.
 
 sig_level_bonferroni <- 0.05/n_genes
 DEGs <- 0
@@ -203,7 +204,7 @@ for (permutation in seq_len(n_permutations)) {
   smokers_star <- shuffle[1:n]
   nonsmokers_star <- shuffle[(n+1):(2*n)]
   diff_star <- mean(smokers_star)-mean(nonsmokers_star)
-  if (diff_star > abs(diff)) {
+  if (abs(diff_star) >= abs(diff)) {
     more_extreme <- more_extreme + 1
   }
 }
@@ -232,7 +233,9 @@ for (permutation in seq_len(n_permutations)) {
   smokers_star <- shuffle[1:n]
   nonsmokers_star <- shuffle[(n+1):(2*n)]
   diff_star <- median(smokers_star)-median(nonsmokers_star)
-  if (diff_star > abs(diff_med)) {
+  #Because it is the two-sided test, we need to consider the possibility of 
+  #Greater than or equal than
+  if (abs(diff_star) >= abs(diff_med)) {
     more_extreme <- more_extreme + 1
   }
 }
@@ -321,7 +324,7 @@ $$
 We can now substitute in our given values:
 
 $$
-= \frac{(0.99)(0.00025)}{(0.99)(0.00025) + (0.01)(0.99975)} = 0.2416
+= \frac{(0.99)(0.00025)}{(0.99)(0.00025) + (0.01)(0.99975)} = 0.02416
 $$
 
 **Problem 6 (10 pts)** This problem is to help you understand what we mean by a random sample, and why we say that the sample mean is a random variable. Use the following R code to simulate a sample with sample size n = 10 and calculate the sample mean:
